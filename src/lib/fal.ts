@@ -4,6 +4,13 @@ fal.config({
   credentials: process.env.FAL_KEY,
 });
 
+const FAL_MODEL_T2V = "fal-ai/veo2";
+const FAL_MODEL_I2V = "fal-ai/veo3.1/fast/image-to-video";
+
+export function getFalVideoModelId(imageUrl?: string): string {
+  return imageUrl ? FAL_MODEL_I2V : FAL_MODEL_T2V;
+}
+
 export interface VideoGenerationResult {
   video: {
     url: string;
@@ -12,27 +19,36 @@ export interface VideoGenerationResult {
 
 export async function generateVideo(
   prompt: string,
-  _imageUrl?: string,
-): Promise<{ requestId: string }> {
-  // Note: veo2 is a text-to-video model and may not support image_url directly
-  // The avatar/image would need to be described in the prompt instead
-  const result = await fal.queue.submit("fal-ai/veo3.1/fast/image-to-video", {
+  imageUrl?: string,
+): Promise<{ requestId: string; modelId: string }> {
+  const modelId = getFalVideoModelId(imageUrl);
+
+  // Keep payload minimal and match Fal's typed inputs.
+  if (modelId === FAL_MODEL_T2V) {
+    const result = await fal.queue.submit(FAL_MODEL_T2V, {
+      input: {
+        prompt,
+        aspect_ratio: "16:9" as const,
+        duration: "5s" as const,
+      },
+    });
+    return { requestId: result.request_id, modelId };
+  }
+
+  const result = await fal.queue.submit(FAL_MODEL_I2V, {
     input: {
       prompt,
-      duration: "8s",
-      resolution: "720p",
-      generate_audio: true,
-      auto_fix: true,
+      image_url: imageUrl!,
       aspect_ratio: "16:9" as const,
-      image_url: "https://storage.googleapis.com/falserverless/example_inputs/veo31_i2v_input.jpg
+      duration: "8s" as const,
     },
   });
 
-  return { requestId: result.request_id };
+  return { requestId: result.request_id, modelId };
 }
 
-export async function checkVideoStatus(requestId: string) {
-  const status = await fal.queue.status("fal-ai/veo2", {
+export async function checkVideoStatus(requestId: string, modelId: string) {
+  const status = await fal.queue.status(modelId, {
     requestId,
     logs: true,
   });
@@ -42,8 +58,9 @@ export async function checkVideoStatus(requestId: string) {
 
 export async function getVideoResult(
   requestId: string,
+  modelId: string,
 ): Promise<VideoGenerationResult> {
-  const result = await fal.queue.result("fal-ai/veo2", {
+  const result = await fal.queue.result(modelId, {
     requestId,
   });
 

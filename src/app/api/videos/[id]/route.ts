@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { checkVideoStatus, getVideoResult } from "@/lib/fal";
+import {
+  checkVideoStatus,
+  getFalVideoModelId,
+  getVideoResult,
+} from "@/lib/fal";
 import { uploadVideoFromUrl } from "@/lib/blob";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
@@ -34,14 +38,20 @@ export async function GET(
     // If video is processing, check Fal.ai status
     if (video.status === "PROCESSING" && video.falJobId) {
       try {
-        const falStatus = await checkVideoStatus(video.falJobId);
+        const modelId = getFalVideoModelId(
+          video.avatarUrl?.startsWith("http") ? video.avatarUrl : undefined,
+        );
+        const falStatus = await checkVideoStatus(video.falJobId, modelId);
 
         if (falStatus.status === "COMPLETED") {
           // Get the result
-          const result = await getVideoResult(video.falJobId);
+          const result = await getVideoResult(video.falJobId, modelId);
 
           // Upload video to Vercel Blob for permanent storage
-          const permanentUrl = await uploadVideoFromUrl(result.video.url, video.id);
+          const permanentUrl = await uploadVideoFromUrl(
+            result.video.url,
+            video.id,
+          );
 
           // Update video record
           const updatedVideo = await prisma.video.update({
@@ -87,7 +97,7 @@ export async function GET(
     console.error("Error fetching video:", error);
     return NextResponse.json(
       { error: "Failed to fetch video" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -119,7 +129,7 @@ export async function POST(req: NextRequest) {
     console.error("Error creating video:", error);
     return NextResponse.json(
       { error: "Failed to create video" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

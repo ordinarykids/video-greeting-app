@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { generateVideo } from "@/lib/fal";
+import { uploadImageFromUrl } from "@/lib/blob";
 import { z } from "zod";
 
 const generateSchema = z.object({
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest) {
 
     const occasion = (video.occasion || "custom").toString();
     const message = (video.message || "").toString();
-    const avatarUrl = (video.avatarUrl || "").toString();
+    let avatarUrl = (video.avatarUrl || "").toString();
 
     if (!avatarUrl) {
       return NextResponse.json(
@@ -98,8 +99,32 @@ export async function POST(req: NextRequest) {
     // Build the prompt for Veo
     const prompt = buildVideoPrompt(occasion, message);
 
+    // Ensure any relative avatar URLs are publicly accessible (store in Vercel Blob),
+    // so we can pass them to Fal as image_url.
+    if (avatarUrl.startsWith("/")) {
+      const baseUrl = process.env.NEXTAUTH_URL;
+      if (baseUrl) {
+        try {
+          const absoluteUrl = new URL(avatarUrl, baseUrl).toString();
+          const uploadedUrl = await uploadImageFromUrl(
+            absoluteUrl,
+            `${videoId}-avatar`,
+          );
+          avatarUrl = uploadedUrl;
+          await prisma.video.update({
+            where: { id: videoId },
+            data: { avatarUrl: uploadedUrl },
+          });
+        } catch (error) {
+          // If presets aren't real images (e.g., emoji placeholders), fall back to text-to-video.
+          console.warn("Failed to upload preset avatar to blob:", error);
+        }
+      }
+    }
+
     // Call Fal.ai to generate video
-    const { requestId } = await generateVideo(prompt, avatarUrl);
+    const imageUrl = avatarUrl.startsWith("http") ? avatarUrl : undefined;
+    const { requestId } = await generateVideo(prompt, imageUrl);
 
     // Update video record with job ID
     await prisma.video.update({
