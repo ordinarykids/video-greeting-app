@@ -35,6 +35,7 @@ export default async function VideoPage({ params }: VideoPageProps) {
       message: true,
       status: true,
       videoUrl: true,
+      shots: true,
       createdAt: true,
       user: {
         select: { name: true },
@@ -46,6 +47,13 @@ export default async function VideoPage({ params }: VideoPageProps) {
     notFound();
   }
 
+  // Extract shot video URLs for fallback sequential playback
+  const shotRecords =
+    (video.shots as Array<{ videoUrl?: string | null }>) || [];
+  const shotVideoUrls = shotRecords
+    .filter((s) => !!s.videoUrl)
+    .map((s) => s.videoUrl as string);
+
   return (
     <VideoShareClient
       video={{
@@ -53,6 +61,7 @@ export default async function VideoPage({ params }: VideoPageProps) {
         occasion: video.occasion,
         message: video.message,
         videoUrl: video.videoUrl,
+        shotVideoUrls: shotVideoUrls.length > 1 ? shotVideoUrls : undefined,
         createdAt: video.createdAt.toISOString(),
         creatorName: video.user.name || "Someone",
       }}

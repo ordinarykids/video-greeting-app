@@ -48,6 +48,16 @@ export async function GET(
       return NextResponse.json({ error: "Video not found" }, { status: 404 });
     }
 
+    // If video is currently being merged, tell the client to keep polling
+    if (video.status === "MERGING") {
+      return NextResponse.json({
+        id: video.id,
+        status: "MERGING",
+        progress: "Merging shots into final video...",
+        videoUrl: null,
+      });
+    }
+
     // If video is processing, check Fal.ai status
     if (video.status === "PROCESSING" && video.falJobId) {
       try {
@@ -122,25 +132,84 @@ export async function GET(
               .map((s) => s.videoUrl)
               .filter(Boolean) as string[];
 
-            // Use the first shot video as primary, store all in shots
-            const primaryUrl = shotVideoUrls[0] || null;
-
-            const updatedVideo = await prisma.video.update({
-              where: { id },
-              data: {
+            // Single-shot videos don't need merging
+            if (shotVideoUrls.length <= 1) {
+              const primaryUrl = shotVideoUrls[0] || null;
+              await prisma.video.update({
+                where: { id },
+                data: {
+                  status: "COMPLETED",
+                  videoUrl: primaryUrl,
+                  shots: shotRecords as unknown as Prisma.InputJsonValue,
+                },
+              });
+              return NextResponse.json({
+                id: video.id,
                 status: "COMPLETED",
                 videoUrl: primaryUrl,
+                shotVideoUrls,
+                shareUrl: `${process.env.NEXTAUTH_URL}/video/${video.id}`,
+              });
+            }
+
+            // Multi-shot: transition to MERGING (prevents duplicate merges)
+            await prisma.video.update({
+              where: { id },
+              data: {
+                status: "MERGING",
                 shots: shotRecords as unknown as Prisma.InputJsonValue,
               },
             });
 
-            return NextResponse.json({
-              id: updatedVideo.id,
-              status: "COMPLETED",
-              videoUrl: updatedVideo.videoUrl,
-              shotVideoUrls,
-              shareUrl: `${process.env.NEXTAUTH_URL}/video/${updatedVideo.id}`,
-            });
+            try {
+              const { concatenateVideos } = await import("@/lib/concat");
+              const { uploadVideoBuffer } = await import("@/lib/blob");
+
+              const mergedBuffer = await concatenateVideos(shotVideoUrls);
+              const mergedUrl = await uploadVideoBuffer(mergedBuffer, video.id);
+
+              await prisma.video.update({
+                where: { id },
+                data: {
+                  status: "COMPLETED",
+                  videoUrl: mergedUrl,
+                  shots: shotRecords as unknown as Prisma.InputJsonValue,
+                },
+              });
+
+              return NextResponse.json({
+                id: video.id,
+                status: "COMPLETED",
+                videoUrl: mergedUrl,
+                shotVideoUrls,
+                shareUrl: `${process.env.NEXTAUTH_URL}/video/${video.id}`,
+              });
+            } catch (mergeError) {
+              console.error(
+                "Video concatenation failed, falling back:",
+                mergeError,
+              );
+
+              // Fallback: mark COMPLETED with first shot URL
+              // Client can still play shots sequentially
+              const primaryUrl = shotVideoUrls[0] || null;
+              await prisma.video.update({
+                where: { id },
+                data: {
+                  status: "COMPLETED",
+                  videoUrl: primaryUrl,
+                  shots: shotRecords as unknown as Prisma.InputJsonValue,
+                },
+              });
+
+              return NextResponse.json({
+                id: video.id,
+                status: "COMPLETED",
+                videoUrl: primaryUrl,
+                shotVideoUrls,
+                shareUrl: `${process.env.NEXTAUTH_URL}/video/${video.id}`,
+              });
+            }
           }
 
           // Some shots still processing — persist any updates

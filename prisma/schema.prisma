@@ -91,6 +91,7 @@ model Payment {
 enum VideoStatus {
   PENDING
   PROCESSING
+  MERGING
   COMPLETED
   FAILED
 }

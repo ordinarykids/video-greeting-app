@@ -15,9 +15,19 @@ export default function VideoPlayer({
   shotVideoUrls,
   poster,
 }: VideoPlayerProps) {
-  // Build playlist: use shotVideoUrls if provided, otherwise just the single videoUrl
-  const playlist =
-    shotVideoUrls && shotVideoUrls.length > 1 ? shotVideoUrls : [videoUrl];
+  // Detect if videoUrl is a merged video (different from any individual shot URL).
+  // If merged, play as a single source. If not merged (fallback), use sequential playback.
+  const isMergedVideo =
+    !!videoUrl &&
+    !!shotVideoUrls &&
+    shotVideoUrls.length > 1 &&
+    !shotVideoUrls.includes(videoUrl);
+
+  const playlist = isMergedVideo
+    ? [videoUrl]
+    : shotVideoUrls && shotVideoUrls.length > 1
+      ? shotVideoUrls
+      : [videoUrl];
   const isMultiShot = playlist.length > 1;
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -118,14 +128,17 @@ export default function VideoPlayer({
 
   const handleDownload = async () => {
     try {
-      const response = await fetch(currentSrc);
+      // For merged video or single shot, download the main videoUrl
+      const downloadUrl = isMergedVideo ? videoUrl : currentSrc;
+      const response = await fetch(downloadUrl);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = isMultiShot
-        ? `video-greeting-shot-${currentIndex + 1}.mp4`
-        : "video-greeting.mp4";
+      a.download =
+        isMultiShot && !isMergedVideo
+          ? `video-greeting-shot-${currentIndex + 1}.mp4`
+          : "video-greeting.mp4";
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);

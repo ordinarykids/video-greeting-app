@@ -52,6 +52,10 @@ function SuccessContent() {
         setStatus("failed");
         setErrorMessage(videoData.error || "Video generation failed.");
         return true; // Stop polling
+      } else if (videoData.status === "MERGING") {
+        setStatus("processing");
+        setProgressText("Merging shots into final video...");
+        return false; // Continue polling
       } else {
         setStatus("processing");
         if (videoData.progress) {

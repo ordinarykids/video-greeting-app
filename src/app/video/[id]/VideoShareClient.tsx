@@ -12,6 +12,7 @@ interface VideoShareClientProps {
     occasion: string;
     message: string;
     videoUrl: string;
+    shotVideoUrls?: string[];
     createdAt: string;
     creatorName: string;
   };
@@ -80,7 +81,10 @@ export default function VideoShareClient({ video }: VideoShareClientProps) {
       <div className="max-w-3xl mx-auto">
         <Card variant="elevated" className="overflow-hidden">
           {/* Video Player */}
-          <VideoPlayer videoUrl={video.videoUrl} />
+          <VideoPlayer
+            videoUrl={video.videoUrl}
+            shotVideoUrls={video.shotVideoUrls}
+          />
 
           {/* Video Info */}
           <div className="p-6">

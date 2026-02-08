@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "src/app/api/videos/[id]/route.ts": {
+      "maxDuration": 60
+    }
+  }
+}

@@ -12,6 +12,9 @@
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
     "@fal-ai/client": "^1.8.1",
+    "@ffmpeg/core": "^0.12.10",
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
     "@prisma/adapter-pg": "^7.2.0",
     "@prisma/client": "^7.2.0",
     "@stripe/stripe-js": "^8.6.0",

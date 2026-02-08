@@ -11,7 +11,7 @@ interface VideoItem {
   id: string;
   occasion: string;
   message: string;
-  status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+  status: "PENDING" | "PROCESSING" | "MERGING" | "COMPLETED" | "FAILED";
   videoUrl: string | null;
   createdAt: string;
 }
@@ -62,6 +62,8 @@ export default function DashboardPage() {
         return <CheckCircle className="h-5 w-5 text-green-500" />;
       case "PROCESSING":
         return <Loader2 className="h-5 w-5 text-gray-500 animate-spin" />;
+      case "MERGING":
+        return <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />;
       case "FAILED":
         return <AlertCircle className="h-5 w-5 text-red-500" />;
       default:
@@ -75,6 +77,8 @@ export default function DashboardPage() {
         return "Ready";
       case "PROCESSING":
         return "Processing";
+      case "MERGING":
+        return "Merging";
       case "FAILED":
         return "Failed";
       default:

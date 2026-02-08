@@ -26,6 +26,17 @@ export async function uploadVideoFromUrl(
   return uploadToBlob(videoBlob, `${videoId}.mp4`, "videos");
 }
 
+export async function uploadVideoBuffer(
+  buffer: Uint8Array,
+  videoId: string,
+): Promise<string> {
+  // Copy into a fresh ArrayBuffer to avoid SharedArrayBuffer TS issues
+  const ab = new ArrayBuffer(buffer.byteLength);
+  new Uint8Array(ab).set(buffer);
+  const blob = new Blob([ab], { type: "video/mp4" });
+  return uploadToBlob(blob, `${videoId}-merged.mp4`, "videos");
+}
+
 export async function uploadImageFromUrl(
   imageUrl: string,
   filename: string,
