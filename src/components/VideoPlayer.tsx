@@ -94,7 +94,7 @@ export default function VideoPlayer({ videoUrl, poster }: VideoPlayerProps) {
           className="absolute inset-0 flex items-center justify-center bg-black/30 transition-opacity"
         >
           <div className="h-16 w-16 rounded-full bg-white/90 flex items-center justify-center">
-            <Play className="h-8 w-8 text-violet-600 ml-1" />
+            <Play className="h-8 w-8 text-gray-900 ml-1" />
           </div>
         </button>
       )}
@@ -115,7 +115,7 @@ export default function VideoPlayer({ videoUrl, poster }: VideoPlayerProps) {
           <div className="flex items-center gap-3">
             <button
               onClick={togglePlay}
-              className="text-white hover:text-violet-300 transition-colors"
+              className="text-white hover:text-gray-300 transition-colors"
             >
               {isPlaying ? (
                 <Pause className="h-5 w-5" />
@@ -125,7 +125,7 @@ export default function VideoPlayer({ videoUrl, poster }: VideoPlayerProps) {
             </button>
             <button
               onClick={toggleMute}
-              className="text-white hover:text-violet-300 transition-colors"
+              className="text-white hover:text-gray-300 transition-colors"
             >
               {isMuted ? (
                 <VolumeX className="h-5 w-5" />
@@ -138,13 +138,13 @@ export default function VideoPlayer({ videoUrl, poster }: VideoPlayerProps) {
           <div className="flex items-center gap-3">
             <button
               onClick={handleDownload}
-              className="text-white hover:text-violet-300 transition-colors"
+              className="text-white hover:text-gray-300 transition-colors"
             >
               <Download className="h-5 w-5" />
             </button>
             <button
               onClick={handleFullscreen}
-              className="text-white hover:text-violet-300 transition-colors"
+              className="text-white hover:text-gray-300 transition-colors"
             >
               <Maximize className="h-5 w-5" />
             </button>

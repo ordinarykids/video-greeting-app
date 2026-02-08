@@ -7,14 +7,16 @@ import { ArrowLeft, ArrowRight, Check, Loader2 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import OccasionPicker from "@/components/OccasionPicker";
+import ModelPicker from "@/components/ModelPicker";
 import AvatarSelector from "@/components/AvatarSelector";
 import MessageEditor from "@/components/MessageEditor";
 import PaymentButton from "@/components/PaymentButton";
 
-type Step = 1 | 2 | 3 | 4;
+type Step = 1 | 2 | 3 | 4 | 5;
 
 interface VideoData {
   occasion: string | null;
+  modelId: string | null;
   avatarUrl: string | null;
   message: string;
 }
@@ -26,6 +28,7 @@ export default function CreatePage() {
   const [videoId, setVideoId] = useState<string | null>(null);
   const [videoData, setVideoData] = useState<VideoData>({
     occasion: null,
+    modelId: null,
     avatarUrl: null,
     message: "",
   });
@@ -42,8 +45,10 @@ export default function CreatePage() {
       case 1:
         return videoData.occasion !== null;
       case 2:
-        return videoData.avatarUrl !== null;
+        return videoData.modelId !== null;
       case 3:
+        return videoData.avatarUrl !== null;
+      case 4:
         return videoData.message.length > 0 && videoData.message.length <= 500;
       default:
         return true;
@@ -51,7 +56,7 @@ export default function CreatePage() {
   };
 
   const handleNext = async () => {
-    if (step === 3 && !videoId) {
+    if (step === 4 && !videoId) {
       // Create video record before proceeding to payment
       setIsCreating(true);
       try {
@@ -67,14 +72,14 @@ export default function CreatePage() {
 
         const { videoId: newVideoId } = await response.json();
         setVideoId(newVideoId);
-        setStep(4);
+        setStep(5);
       } catch (error) {
         console.error("Error creating video:", error);
         alert("Failed to save video data. Please try again.");
       } finally {
         setIsCreating(false);
       }
-    } else if (step < 4) {
+    } else if (step < 5) {
       setStep((step + 1) as Step);
     }
   };
@@ -85,19 +90,32 @@ export default function CreatePage() {
     }
   };
 
+  // Helper to get the selected model's label for the review screen
+  const getModelLabel = () => {
+    const labels: Record<string, string> = {
+      "fal-ai/veo2": "Veo 2 – Text to Video",
+      "fal-ai/veo3.1/fast/image-to-video": "Veo 3.1 Fast – Image to Video",
+      "fal-ai/veo3.1/reference-to-video": "Veo 3.1 – Reference to Video",
+    };
+    return labels[videoData.modelId || ""] || videoData.modelId || "—";
+  };
+
   if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-gray-900" />
       </div>
     );
   }
 
+  const userCredits = session?.user?.credits ?? 0;
+
   const steps = [
     { number: 1, label: "Occasion" },
-    { number: 2, label: "Avatar" },
-    { number: 3, label: "Message" },
-    { number: 4, label: "Pay & Generate" },
+    { number: 2, label: "Model" },
+    { number: 3, label: "Avatar" },
+    { number: 4, label: "Message" },
+    { number: 5, label: userCredits > 0 ? "Generate" : "Pay & Generate" },
   ];
 
   return (
@@ -111,7 +129,7 @@ export default function CreatePage() {
                 <div
                   className={`flex items-center justify-center w-10 h-10 rounded-full font-medium ${
                     step >= s.number
-                      ? "bg-violet-600 text-white"
+                      ? "bg-gray-900 text-white"
                       : "bg-gray-200 text-gray-500"
                   }`}
                 >
@@ -119,15 +137,15 @@ export default function CreatePage() {
                 </div>
                 <span
                   className={`ml-2 hidden sm:block ${
-                    step >= s.number ? "text-violet-600 font-medium" : "text-gray-500"
+                    step >= s.number ? "text-gray-900 font-medium" : "text-gray-500"
                   }`}
                 >
                   {s.label}
                 </span>
                 {index < steps.length - 1 && (
                   <div
-                    className={`w-12 sm:w-24 h-1 mx-2 rounded ${
-                      step > s.number ? "bg-violet-600" : "bg-gray-200"
+                    className={`w-8 sm:w-16 h-1 mx-2 rounded ${
+                      step > s.number ? "bg-gray-900" : "bg-gray-200"
                     }`}
                   />
                 )}
@@ -155,8 +173,31 @@ export default function CreatePage() {
             </div>
           )}
 
-          {/* Step 2: Avatar */}
+          {/* Step 2: Model Selection */}
           {step === 2 && (
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                Choose a video model
+              </h2>
+              <p className="text-gray-600 mb-6">
+                Pick the AI model that will generate your video. Models that need
+                an image will be available once you upload an avatar.
+              </p>
+              <ModelPicker
+                selected={videoData.modelId}
+                onSelect={(modelId) =>
+                  setVideoData({ ...videoData, modelId })
+                }
+                hasImage={
+                  videoData.avatarUrl !== null &&
+                  videoData.avatarUrl !== ""
+                }
+              />
+            </div>
+          )}
+
+          {/* Step 3: Avatar */}
+          {step === 3 && (
             <div>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
                 Choose an avatar
@@ -173,8 +214,8 @@ export default function CreatePage() {
             </div>
           )}
 
-          {/* Step 3: Message */}
-          {step === 3 && (
+          {/* Step 4: Message */}
+          {step === 4 && (
             <div>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
                 Write your message
@@ -192,20 +233,28 @@ export default function CreatePage() {
             </div>
           )}
 
-          {/* Step 4: Preview & Pay */}
-          {step === 4 && (
+          {/* Step 5: Preview & Pay / Generate */}
+          {step === 5 && (
             <div>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                Review & Pay
+                {userCredits > 0 ? "Review & Generate" : "Review & Pay"}
               </h2>
               <p className="text-gray-600 mb-6">
-                Confirm your video details and complete payment.
+                {userCredits > 0
+                  ? "Confirm your video details and use a credit to generate."
+                  : "Confirm your video details and complete payment."}
               </p>
 
               <div className="space-y-4 mb-8">
                 <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                   <span className="text-gray-600">Occasion</span>
                   <span className="font-medium capitalize">{videoData.occasion}</span>
+                </div>
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <span className="text-gray-600">Model</span>
+                  <span className="font-medium text-sm text-right max-w-[60%]">
+                    {getModelLabel()}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                   <span className="text-gray-600">Avatar</span>
@@ -232,18 +281,27 @@ export default function CreatePage() {
                   <span className="text-gray-600 block mb-2">Message</span>
                   <p className="text-gray-900">{videoData.message}</p>
                 </div>
-                <div className="flex items-center justify-between p-4 bg-violet-50 rounded-lg">
-                  <span className="text-violet-600 font-medium">Total</span>
-                  <span className="text-2xl font-bold text-violet-600">$5.00</span>
-                </div>
+                {userCredits > 0 ? (
+                  <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
+                    <span className="text-green-700 font-medium">Cost</span>
+                    <span className="text-lg font-bold text-green-700">
+                      1 Credit <span className="text-sm font-normal text-green-600">({userCredits} available)</span>
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between p-4 bg-gray-100 rounded-lg">
+                    <span className="text-gray-900 font-medium">Total</span>
+                    <span className="text-2xl font-bold text-gray-900">$5.00</span>
+                  </div>
+                )}
               </div>
 
-              <PaymentButton videoId={videoId || undefined} />
+              <PaymentButton videoId={videoId || undefined} credits={userCredits} />
             </div>
           )}
 
           {/* Navigation Buttons */}
-          {step < 4 && (
+          {step < 5 && (
             <div className="flex justify-between mt-8 pt-6 border-t border-gray-100">
               <Button
                 variant="ghost"
@@ -258,13 +316,13 @@ export default function CreatePage() {
                 disabled={!canProceed()}
                 loading={isCreating}
               >
-                {step === 3 ? "Review" : "Next"}
+                {step === 4 ? "Review" : "Next"}
                 <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
             </div>
           )}
 
-          {step === 4 && (
+          {step === 5 && (
             <div className="mt-4 pt-4 border-t border-gray-100">
               <Button
                 variant="ghost"

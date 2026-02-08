@@ -51,7 +51,7 @@ export default function DashboardPage() {
   if (status === "loading" || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-gray-900" />
       </div>
     );
   }
@@ -61,7 +61,7 @@ export default function DashboardPage() {
       case "COMPLETED":
         return <CheckCircle className="h-5 w-5 text-green-500" />;
       case "PROCESSING":
-        return <Loader2 className="h-5 w-5 text-violet-500 animate-spin" />;
+        return <Loader2 className="h-5 w-5 text-gray-500 animate-spin" />;
       case "FAILED":
         return <AlertCircle className="h-5 w-5 text-red-500" />;
       default:
@@ -127,7 +127,7 @@ export default function DashboardPage() {
                 variant="bordered"
                 className="overflow-hidden hover:shadow-lg transition-shadow"
               >
-                <div className="aspect-video bg-gradient-to-br from-violet-100 to-purple-100 flex items-center justify-center">
+                <div className="aspect-video bg-gradient-to-br from-gray-100 to-gray-50 flex items-center justify-center">
                   {video.status === "COMPLETED" && video.videoUrl ? (
                     <video
                       src={video.videoUrl}
@@ -136,12 +136,12 @@ export default function DashboardPage() {
                       playsInline
                     />
                   ) : (
-                    <Video className="h-12 w-12 text-violet-300" />
+                    <Video className="h-12 w-12 text-gray-300" />
                   )}
                 </div>
                 <div className="p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-violet-600 capitalize">
+                    <span className="text-sm font-medium text-gray-900 capitalize">
                       {video.occasion}
                     </span>
                     <div className="flex items-center gap-1.5">
@@ -180,7 +180,7 @@ export default function DashboardPage() {
           <div className="mt-8 text-center">
             <Card variant="bordered" className="inline-block px-6 py-3">
               <span className="text-gray-600">Available Credits: </span>
-              <span className="font-bold text-violet-600">{session.user.credits}</span>
+              <span className="font-bold text-gray-900">{session.user.credits}</span>
             </Card>
           </div>
         )}

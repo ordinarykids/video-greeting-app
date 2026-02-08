@@ -13,7 +13,7 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 items-center">
           <Link href="/" className="flex items-center gap-2">
-            <Video className="h-8 w-8 text-violet-600" />
+            <Video className="h-8 w-8 text-gray-900" />
             <span className="text-xl font-bold text-gray-900">VideoGreet</span>
           </Link>
 

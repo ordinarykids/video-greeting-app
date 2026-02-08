@@ -52,10 +52,10 @@ export default function MessageEditor({
           value={message}
           onChange={(e) => onChange(e.target.value)}
           placeholder="Write your personalized message here..."
-          className={`h-40 w-full resize-none rounded-xl border-2 p-4 transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500 ${
+          className={`h-40 w-full resize-none rounded-xl border-2 p-4 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-900 ${
             isOverLimit
               ? "border-red-300 focus:border-red-500"
-              : "border-gray-200 focus:border-violet-500"
+              : "border-gray-200 focus:border-gray-900"
           }`}
         />
         <div
@@ -92,7 +92,7 @@ export default function MessageEditor({
       {!templatesVisible && message && (
         <button
           onClick={() => setShowTemplates(true)}
-          className="text-sm text-violet-600 hover:text-violet-700"
+          className="text-sm text-gray-900 hover:text-black underline"
         >
           Show message templates
         </button>

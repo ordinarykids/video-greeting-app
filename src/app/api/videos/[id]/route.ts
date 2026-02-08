@@ -26,6 +26,7 @@ export async function GET(
         message: true,
         avatarUrl: true,
         falJobId: true,
+        falModelId: true,
         createdAt: true,
         userId: true,
       },
@@ -38,9 +39,12 @@ export async function GET(
     // If video is processing, check Fal.ai status
     if (video.status === "PROCESSING" && video.falJobId) {
       try {
-        const modelId = getFalVideoModelId(
-          video.avatarUrl?.startsWith("http") ? video.avatarUrl : undefined,
-        );
+        // Use the stored model ID, falling back to legacy auto-detection
+        const modelId =
+          video.falModelId ||
+          getFalVideoModelId(
+            video.avatarUrl?.startsWith("http") ? video.avatarUrl : undefined,
+          );
         const falStatus = await checkVideoStatus(video.falJobId, modelId);
 
         if (falStatus.status === "COMPLETED") {

@@ -33,8 +33,8 @@ const occasions = [
     id: "custom",
     label: "Custom",
     icon: MessageSquare,
-    color: "bg-violet-100 text-violet-600 border-violet-200",
-    selectedColor: "bg-violet-500 text-white border-violet-500",
+    color: "bg-gray-100 text-gray-600 border-gray-200",
+    selectedColor: "bg-gray-900 text-white border-gray-900",
   },
 ];
 

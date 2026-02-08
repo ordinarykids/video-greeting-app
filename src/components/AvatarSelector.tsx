@@ -64,7 +64,7 @@ export default function AvatarSelector({
             onClick={() => onSelect(avatar.url)}
             className={`relative aspect-square rounded-xl overflow-hidden border-4 transition-all ${
               selected === avatar.url
-                ? "border-violet-500 scale-105"
+                ? "border-gray-900 scale-105"
                 : "border-transparent hover:border-gray-300"
             }`}
           >
@@ -77,8 +77,8 @@ export default function AvatarSelector({
               {avatar.id === "presenter" && "📺"}
             </div>
             {selected === avatar.url && (
-              <div className="absolute inset-0 bg-violet-500/20 flex items-center justify-center">
-                <Check className="h-8 w-8 text-violet-600 bg-white rounded-full p-1" />
+              <div className="absolute inset-0 bg-gray-900/20 flex items-center justify-center">
+                <Check className="h-8 w-8 text-gray-900 bg-white rounded-full p-1" />
               </div>
             )}
           </button>
@@ -104,7 +104,7 @@ export default function AvatarSelector({
             <div
               className={`relative h-24 w-24 rounded-xl overflow-hidden border-4 ${
                 selected === customAvatar
-                  ? "border-violet-500"
+                  ? "border-gray-900"
                   : "border-gray-200"
               }`}
             >
@@ -114,8 +114,8 @@ export default function AvatarSelector({
                 className="w-full h-full object-cover"
               />
               {selected === customAvatar && (
-                <div className="absolute inset-0 bg-violet-500/20 flex items-center justify-center">
-                  <Check className="h-6 w-6 text-violet-600 bg-white rounded-full p-1" />
+                <div className="absolute inset-0 bg-gray-900/20 flex items-center justify-center">
+                  <Check className="h-6 w-6 text-gray-900 bg-white rounded-full p-1" />
                 </div>
               )}
             </div>

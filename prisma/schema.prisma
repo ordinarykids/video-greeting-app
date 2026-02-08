@@ -57,17 +57,18 @@ model VerificationToken {
 }
 
 model Video {
-  id        String      @id @default(cuid())
-  userId    String
-  user      User        @relation(fields: [userId], references: [id])
-  occasion  String
-  avatarUrl String
-  message   String
-  videoUrl  String?
-  status    VideoStatus @default(PENDING)
-  falJobId  String?
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  id         String      @id @default(cuid())
+  userId     String
+  user       User        @relation(fields: [userId], references: [id])
+  occasion   String
+  avatarUrl  String
+  message    String
+  videoUrl   String?
+  status     VideoStatus @default(PENDING)
+  falJobId   String?
+  falModelId String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
 }
 
 model Payment {

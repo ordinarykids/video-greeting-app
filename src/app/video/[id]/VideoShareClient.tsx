@@ -76,7 +76,7 @@ export default function VideoShareClient({ video }: VideoShareClientProps) {
   };
 
   return (
-    <div className="min-h-screen py-12 px-4 bg-gradient-to-b from-violet-50 to-white">
+    <div className="min-h-screen py-12 px-4 bg-white">
       <div className="max-w-3xl mx-auto">
         <Card variant="elevated" className="overflow-hidden">
           {/* Video Player */}

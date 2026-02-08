@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { occasion, avatarUrl, message } = body;
+    const { occasion, avatarUrl, message, modelId } = body;
 
     const video = await prisma.video.create({
       data: {
@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
         occasion: occasion || "custom",
         avatarUrl: avatarUrl || "",
         message: message || "",
+        falModelId: modelId || null,
         status: "PENDING",
       },
     });

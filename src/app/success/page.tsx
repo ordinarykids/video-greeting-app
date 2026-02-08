@@ -21,17 +21,48 @@ function SuccessContent() {
   const generationStartedRef = useRef(false);
 
   const sessionId = searchParams.get("session_id");
+  const directVideoId = searchParams.get("video_id");
 
   useEffect(() => {
-    if (!sessionId) {
+    if (!sessionId && !directVideoId) {
       router.push("/");
       return;
     }
 
+    // Poll video status by video ID (used for both credit-based and Stripe flows)
+    const pollVideoStatus = async (vid: string): Promise<boolean> => {
+      const videoResponse = await fetch(`/api/videos/${vid}`);
+      if (!videoResponse.ok) {
+        const body = await videoResponse.json().catch(() => null);
+        throw new Error(body?.error || "Failed to check video status");
+      }
+
+      const videoData = await videoResponse.json();
+
+      if (videoData.status === "COMPLETED" && videoData.videoUrl) {
+        setStatus("completed");
+        setVideoUrl(videoData.videoUrl);
+        return true; // Stop polling
+      } else if (videoData.status === "FAILED") {
+        setStatus("failed");
+        setErrorMessage(videoData.error || "Video generation failed.");
+        return true; // Stop polling
+      } else {
+        setStatus("processing");
+        return false; // Continue polling
+      }
+    };
+
     // Start polling for video status
     const pollStatus = async () => {
       try {
-        // First, check if payment was completed and get video ID
+        // Credit-based flow: we already have the video ID and generation was started
+        if (directVideoId) {
+          setVideoId(directVideoId);
+          return await pollVideoStatus(directVideoId);
+        }
+
+        // Stripe flow: check payment status first, then poll video
         const paymentResponse = await fetch(
           `/api/payment-status?session_id=${sessionId}`,
         );
@@ -45,7 +76,6 @@ function SuccessContent() {
         if (paymentData.status === "COMPLETED" && paymentData.videoId) {
           setVideoId(paymentData.videoId);
 
-          // Now poll for video generation status
           const videoResponse = await fetch(
             `/api/videos/${paymentData.videoId}`,
           );
@@ -59,11 +89,11 @@ function SuccessContent() {
           if (videoData.status === "COMPLETED" && videoData.videoUrl) {
             setStatus("completed");
             setVideoUrl(videoData.videoUrl);
-            return true; // Stop polling
+            return true;
           } else if (videoData.status === "FAILED") {
             setStatus("failed");
             setErrorMessage(videoData.error || "Video generation failed.");
-            return true; // Stop polling
+            return true;
           } else {
             // If video is still pending and we haven't kicked off generation, do it now.
             if (
@@ -78,7 +108,7 @@ function SuccessContent() {
               }).catch(() => null);
             }
             setStatus("processing");
-            return false; // Continue polling
+            return false;
           }
         } else {
           setStatus("processing");
@@ -105,7 +135,7 @@ function SuccessContent() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [sessionId, router]);
+  }, [sessionId, directVideoId, router]);
 
   const handleStartGeneration = async () => {
     if (!videoId) return;
@@ -136,8 +166,8 @@ function SuccessContent() {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <Loader2 className="mx-auto mb-4 h-12 w-12 animate-spin text-violet-600" />
-          <p className="text-gray-600">Confirming your payment...</p>
+          <Loader2 className="mx-auto mb-4 h-12 w-12 animate-spin text-gray-900" />
+          <p className="text-gray-600">{directVideoId ? "Starting generation..." : "Confirming your payment..."}</p>
         </div>
       </div>
     );
@@ -149,8 +179,8 @@ function SuccessContent() {
         <Card variant="elevated" className="p-8 text-center">
           {status === "processing" && (
             <>
-              <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-violet-100">
-                <Loader2 className="h-10 w-10 animate-spin text-violet-600" />
+              <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-gray-100">
+                <Loader2 className="h-10 w-10 animate-spin text-gray-900" />
               </div>
               <h1 className="mb-2 text-2xl font-bold text-gray-900">
                 Creating Your Video
@@ -254,7 +284,7 @@ export default function SuccessPage() {
     <Suspense
       fallback={
         <div className="flex min-h-screen items-center justify-center">
-          <Loader2 className="h-12 w-12 animate-spin text-violet-600" />
+          <Loader2 className="h-12 w-12 animate-spin text-gray-900" />
         </div>
       }
     >

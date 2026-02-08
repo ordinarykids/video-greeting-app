@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
         message: true,
         avatarUrl: true,
         falJobId: true,
+        falModelId: true,
       },
     });
 
@@ -124,14 +125,16 @@ export async function POST(req: NextRequest) {
 
     // Call Fal.ai to generate video
     const imageUrl = avatarUrl.startsWith("http") ? avatarUrl : undefined;
-    const { requestId } = await generateVideo(prompt, imageUrl);
+    const chosenModel = video.falModelId || undefined;
+    const { requestId, modelId } = await generateVideo(prompt, imageUrl, chosenModel);
 
-    // Update video record with job ID
+    // Update video record with job ID and resolved model
     await prisma.video.update({
       where: { id: videoId },
       data: {
         status: "PROCESSING",
         falJobId: requestId,
+        falModelId: modelId,
       },
     });
 
