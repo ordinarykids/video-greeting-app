@@ -1,22 +1,69 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+Video Greeting App is a Next.js application that lets users create AI-generated
+video greetings. Users pick an occasion, choose a video model, upload/select an
+avatar, write a message, then generate a video using FAL.ai.
+
+## Features
+
+- Multi-step creation flow with model selection
+- FAL.ai video generation with text-to-video and image-to-video models
+- Credit-based generation with Stripe checkout
+- Status polling and permanent storage of generated videos
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 20+
+- pnpm (recommended)
+- PostgreSQL database (e.g., Neon)
+
+### Environment variables
+
+Create a `.env.local` file with:
+
+```
+DATABASE_URL=
+NEXTAUTH_URL=
+NEXTAUTH_SECRET=
+FAL_KEY=
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
+```
+
+### Install dependencies
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
+```
+
+### Set up the database
+
+```bash
+pnpm prisma db push
+pnpm prisma generate
+```
+
+### Run the development server
+
+```bash
 pnpm dev
-# or
-bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Open [http://localhost:3000](http://localhost:3000) to use the app.
+
+## FAL.ai models
+
+The app supports multiple FAL.ai video models. Model choice is stored per video
+and used for both generation and status polling.
+
+- `fal-ai/veo2` (text-to-video)
+- `fal-ai/veo3.1/fast/image-to-video` (image-to-video, fast)
+- `fal-ai/veo3.1/reference-to-video` (best quality, reference images, 1080p, audio)
+
+To add or update models, edit `src/lib/fal.ts` and `src/components/ModelPicker.tsx`.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
