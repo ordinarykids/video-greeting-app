@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { generateVideo } from "@/lib/fal";
 import { uploadImageFromUrl } from "@/lib/blob";
+import { getScenePreset, getCharacterPreset } from "@/lib/presets";
 import { z } from "zod";
 
 const generateSchema = z.object({
@@ -42,6 +43,9 @@ export async function POST(req: NextRequest) {
         occasion: true,
         message: true,
         avatarUrl: true,
+        sceneTag: true,
+        sceneImageUrl: true,
+        characterTag: true,
         falJobId: true,
         falModelId: true,
       },
@@ -67,16 +71,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ status: "FAILED" });
     }
 
-    const occasion = (video.occasion || "custom").toString();
     const message = (video.message || "").toString();
-    let avatarUrl = (video.avatarUrl || "").toString();
-
-    if (!avatarUrl) {
-      return NextResponse.json(
-        { error: "Missing avatarUrl for this video" },
-        { status: 400 },
-      );
-    }
 
     if (!message || message.length > 500) {
       return NextResponse.json(
@@ -97,11 +92,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Build the prompt for Veo
-    const prompt = buildVideoPrompt(occasion, message);
+    // Build the prompt using scene + character + message
+    const prompt = buildVideoPrompt(
+      video.sceneTag,
+      video.characterTag,
+      video.occasion,
+      message,
+    );
 
-    // Ensure any relative avatar URLs are publicly accessible (store in Vercel Blob),
-    // so we can pass them to Fal as image_url.
+    // Collect reference image URLs
+    const imageUrls: string[] = [];
+
+    // Add scene image if available
+    if (video.sceneImageUrl && video.sceneImageUrl.startsWith("http")) {
+      imageUrls.push(video.sceneImageUrl);
+    }
+
+    // Add character/avatar image if available
+    let avatarUrl = (video.avatarUrl || "").toString();
     if (avatarUrl.startsWith("/")) {
       const baseUrl = process.env.NEXTAUTH_URL;
       if (baseUrl) {
@@ -117,16 +125,25 @@ export async function POST(req: NextRequest) {
             data: { avatarUrl: uploadedUrl },
           });
         } catch (error) {
-          // If presets aren't real images (e.g., emoji placeholders), fall back to text-to-video.
-          console.warn("Failed to upload preset avatar to blob:", error);
+          console.warn("Failed to upload avatar to blob:", error);
         }
       }
     }
 
+    if (avatarUrl.startsWith("http")) {
+      imageUrls.push(avatarUrl);
+    }
+
+    if (imageUrls.length === 0) {
+      return NextResponse.json(
+        { error: "At least one reference image is required" },
+        { status: 400 },
+      );
+    }
+
     // Call Fal.ai to generate video
-    const imageUrl = avatarUrl.startsWith("http") ? avatarUrl : undefined;
     const chosenModel = video.falModelId || undefined;
-    const { requestId, modelId } = await generateVideo(prompt, imageUrl, chosenModel);
+    const { requestId, modelId } = await generateVideo(prompt, imageUrls, chosenModel);
 
     // Update video record with job ID and resolved model
     await prisma.video.update({
@@ -159,17 +176,32 @@ export async function POST(req: NextRequest) {
   }
 }
 
-function buildVideoPrompt(occasion: string, message: string): string {
-  const occasionPrefixes: Record<string, string> = {
-    birthday:
-      "A warm and celebratory birthday video greeting where the person says:",
-    congratulations:
-      "An enthusiastic congratulatory video message where the person says:",
-    thankyou: "A heartfelt thank you video message where the person says:",
-    custom: "A personalized video message where the person says:",
+function buildVideoPrompt(
+  sceneTag: string | null,
+  characterTag: string | null,
+  occasion: string,
+  message: string,
+): string {
+  // Look up scene description from preset
+  const scenePreset = sceneTag ? getScenePreset(sceneTag) : null;
+  const sceneDesc = scenePreset
+    ? scenePreset.label.toLowerCase()
+    : "a clean, well-lit setting";
+
+  // Look up character description from preset
+  const characterPreset = characterTag ? getCharacterPreset(characterTag) : null;
+  const characterDesc = characterPreset
+    ? characterPreset.label.toLowerCase()
+    : "the person";
+
+  // Occasion-specific tone
+  const toneMap: Record<string, string> = {
+    birthday: "warm, celebratory, and joyful",
+    congratulations: "enthusiastic and proud",
+    thankyou: "heartfelt and sincere",
+    custom: "friendly and genuine",
   };
+  const tone = toneMap[occasion] || toneMap.custom;
 
-  const prefix = occasionPrefixes[occasion] || occasionPrefixes.custom;
-
-  return `${prefix} "${message}". The person should appear friendly, warm, and genuine, looking directly at the camera with appropriate emotional expression matching the occasion. High quality, well-lit, professional looking video.`;
+  return `A ${characterDesc} in ${sceneDesc}, looking directly at the camera with a ${tone} expression, speaking the following message: "${message}". The person should appear natural and expressive. High quality, cinematic lighting, professional-looking video.`;
 }

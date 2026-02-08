@@ -14,7 +14,7 @@ export default function Navbar() {
         <div className="flex justify-between h-16 items-center">
           <Link href="/" className="flex items-center gap-2">
             <Video className="h-8 w-8 text-gray-900" />
-            <span className="text-xl font-bold text-gray-900">VideoGreet</span>
+            <span className="text-xl font-bold text-gray-900">Hey Hudson</span>
           </Link>
 
           <div className="flex items-center gap-4">

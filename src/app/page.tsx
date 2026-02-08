@@ -24,8 +24,7 @@ export default function Home() {
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16">
         <div className="text-center">
           <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6">
-            Create AI Video
-            <span className="text-gray-900"> Greetings</span>
+            Send a Video Message
           </h1>
           <p className="text-xl text-gray-500 max-w-2xl mx-auto mb-8">
             Send personalized video messages for birthdays, congratulations, and

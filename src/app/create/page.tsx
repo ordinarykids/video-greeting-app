@@ -6,17 +6,18 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Check, Loader2 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
-import OccasionPicker from "@/components/OccasionPicker";
-import ModelPicker from "@/components/ModelPicker";
-import AvatarSelector from "@/components/AvatarSelector";
+import ScenePicker from "@/components/ScenePicker";
+import CharacterPicker from "@/components/CharacterPicker";
 import MessageEditor from "@/components/MessageEditor";
 import PaymentButton from "@/components/PaymentButton";
+import { getScenePreset, getCharacterPreset } from "@/lib/presets";
 
-type Step = 1 | 2 | 3 | 4 | 5;
+type Step = 1 | 2 | 3 | 4;
 
 interface VideoData {
-  occasion: string | null;
-  modelId: string | null;
+  sceneTag: string | null;
+  sceneImageUrl: string | null;
+  characterTag: string | null;
   avatarUrl: string | null;
   message: string;
 }
@@ -27,8 +28,9 @@ export default function CreatePage() {
   const [step, setStep] = useState<Step>(1);
   const [videoId, setVideoId] = useState<string | null>(null);
   const [videoData, setVideoData] = useState<VideoData>({
-    occasion: null,
-    modelId: null,
+    sceneTag: null,
+    sceneImageUrl: null,
+    characterTag: null,
     avatarUrl: null,
     message: "",
   });
@@ -43,12 +45,10 @@ export default function CreatePage() {
   const canProceed = () => {
     switch (step) {
       case 1:
-        return videoData.occasion !== null;
+        return videoData.sceneTag !== null && videoData.sceneImageUrl !== null;
       case 2:
-        return videoData.modelId !== null;
+        return videoData.characterTag !== null && videoData.avatarUrl !== null;
       case 3:
-        return videoData.avatarUrl !== null;
-      case 4:
         return videoData.message.length > 0 && videoData.message.length <= 500;
       default:
         return true;
@@ -56,14 +56,20 @@ export default function CreatePage() {
   };
 
   const handleNext = async () => {
-    if (step === 4 && !videoId) {
-      // Create video record before proceeding to payment
+    if (step === 3 && !videoId) {
+      // Create video record before proceeding to review/payment
       setIsCreating(true);
       try {
         const response = await fetch("/api/videos/new", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(videoData),
+          body: JSON.stringify({
+            sceneTag: videoData.sceneTag,
+            sceneImageUrl: videoData.sceneImageUrl,
+            characterTag: videoData.characterTag,
+            avatarUrl: videoData.avatarUrl,
+            message: videoData.message,
+          }),
         });
 
         if (!response.ok) {
@@ -72,14 +78,14 @@ export default function CreatePage() {
 
         const { videoId: newVideoId } = await response.json();
         setVideoId(newVideoId);
-        setStep(5);
+        setStep(4);
       } catch (error) {
         console.error("Error creating video:", error);
         alert("Failed to save video data. Please try again.");
       } finally {
         setIsCreating(false);
       }
-    } else if (step < 5) {
+    } else if (step < 4) {
       setStep((step + 1) as Step);
     }
   };
@@ -90,14 +96,17 @@ export default function CreatePage() {
     }
   };
 
-  // Helper to get the selected model's label for the review screen
-  const getModelLabel = () => {
-    const labels: Record<string, string> = {
-      "fal-ai/veo2": "Veo 2 – Text to Video",
-      "fal-ai/veo3.1/fast/image-to-video": "Veo 3.1 Fast – Image to Video",
-      "fal-ai/veo3.1/reference-to-video": "Veo 3.1 – Reference to Video",
-    };
-    return labels[videoData.modelId || ""] || videoData.modelId || "—";
+  const getOccasionLabel = () => {
+    if (!videoData.sceneTag) return "Custom";
+    const preset = getScenePreset(videoData.sceneTag);
+    return preset?.label || videoData.sceneTag;
+  };
+
+  const getCharacterLabel = () => {
+    if (!videoData.characterTag) return "Custom";
+    if (videoData.characterTag === "custom-upload") return "Your Upload";
+    const preset = getCharacterPreset(videoData.characterTag);
+    return preset?.label || videoData.characterTag;
   };
 
   if (status === "loading") {
@@ -111,11 +120,10 @@ export default function CreatePage() {
   const userCredits = session?.user?.credits ?? 0;
 
   const steps = [
-    { number: 1, label: "Occasion" },
-    { number: 2, label: "Model" },
-    { number: 3, label: "Avatar" },
-    { number: 4, label: "Message" },
-    { number: 5, label: userCredits > 0 ? "Generate" : "Pay & Generate" },
+    { number: 1, label: "Scene" },
+    { number: 2, label: "Character" },
+    { number: 3, label: "Message" },
+    { number: 4, label: userCredits > 0 ? "Generate" : "Pay & Generate" },
   ];
 
   return (
@@ -155,86 +163,79 @@ export default function CreatePage() {
         </div>
 
         <Card variant="elevated" className="p-8">
-          {/* Step 1: Occasion */}
+          {/* Step 1: Scene */}
           {step === 1 && (
             <div>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                What&apos;s the occasion?
+                Choose a Scene
               </h2>
               <p className="text-gray-600 mb-6">
-                Choose the type of greeting you want to create.
+                Pick a background for your video. Click a card to generate the
+                scene image with AI.
               </p>
-              <OccasionPicker
-                selected={videoData.occasion}
-                onSelect={(occasion) =>
-                  setVideoData({ ...videoData, occasion })
+              <ScenePicker
+                selectedTag={videoData.sceneTag}
+                selectedImageUrl={videoData.sceneImageUrl}
+                onSelect={(tag, imageUrl) =>
+                  setVideoData({
+                    ...videoData,
+                    sceneTag: tag,
+                    sceneImageUrl: imageUrl,
+                  })
                 }
               />
             </div>
           )}
 
-          {/* Step 2: Model Selection */}
+          {/* Step 2: Character */}
           {step === 2 && (
             <div>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                Choose a video model
+                Choose a Character
               </h2>
               <p className="text-gray-600 mb-6">
-                Pick the AI model that will generate your video. Models that need
-                an image will be available once you upload an avatar.
+                Pick a character for your video or upload your own photo.
               </p>
-              <ModelPicker
-                selected={videoData.modelId}
-                onSelect={(modelId) =>
-                  setVideoData({ ...videoData, modelId })
-                }
-                hasImage={
-                  videoData.avatarUrl !== null &&
-                  videoData.avatarUrl !== ""
+              <CharacterPicker
+                selectedTag={videoData.characterTag}
+                selectedImageUrl={videoData.avatarUrl}
+                onSelect={(tag, imageUrl) =>
+                  setVideoData({
+                    ...videoData,
+                    characterTag: tag,
+                    avatarUrl: imageUrl,
+                  })
                 }
               />
             </div>
           )}
 
-          {/* Step 3: Avatar */}
+          {/* Step 3: Message */}
           {step === 3 && (
             <div>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                Choose an avatar
+                Write the Message
               </h2>
               <p className="text-gray-600 mb-6">
-                Select a preset avatar or upload your own photo.
-              </p>
-              <AvatarSelector
-                selected={videoData.avatarUrl}
-                onSelect={(avatarUrl) =>
-                  setVideoData({ ...videoData, avatarUrl })
-                }
-              />
-            </div>
-          )}
-
-          {/* Step 4: Message */}
-          {step === 4 && (
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                Write your message
-              </h2>
-              <p className="text-gray-600 mb-6">
-                This will be spoken in your video greeting (max 500 characters).
+                Write what the character will say in the video (max 500
+                characters).
               </p>
               <MessageEditor
                 message={videoData.message}
                 onChange={(message) =>
                   setVideoData({ ...videoData, message })
                 }
-                occasion={videoData.occasion}
+                occasion={
+                  videoData.sceneTag
+                    ? getScenePreset(videoData.sceneTag)?.occasion || "custom"
+                    : "custom"
+                }
               />
             </div>
           )}
 
-          {/* Step 5: Preview & Pay / Generate */}
-          {step === 5 && (
+          {/* Step 4: Review & Pay / Generate */}
+          {step === 4 && (
             <div>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
                 {userCredits > 0 ? "Review & Generate" : "Review & Pay"}
@@ -246,62 +247,84 @@ export default function CreatePage() {
               </p>
 
               <div className="space-y-4 mb-8">
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                  <span className="text-gray-600">Occasion</span>
-                  <span className="font-medium capitalize">{videoData.occasion}</span>
-                </div>
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                  <span className="text-gray-600">Model</span>
-                  <span className="font-medium text-sm text-right max-w-[60%]">
-                    {getModelLabel()}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                  <span className="text-gray-600">Avatar</span>
-                  <div className="h-10 w-10 rounded-lg bg-gray-200 overflow-hidden">
-                    {videoData.avatarUrl?.includes("/avatars/") ? (
-                      <div className="h-full w-full flex items-center justify-center text-2xl">
-                        {videoData.avatarUrl.includes("male1") && "👨"}
-                        {videoData.avatarUrl.includes("female1") && "👩"}
-                        {videoData.avatarUrl.includes("cartoon") && "🎭"}
-                        {videoData.avatarUrl.includes("robot") && "🤖"}
-                        {videoData.avatarUrl.includes("fantasy") && "🧙"}
-                        {videoData.avatarUrl.includes("presenter") && "📺"}
-                      </div>
-                    ) : (
+                {/* Scene preview */}
+                <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
+                  <div className="h-16 w-24 rounded-lg bg-gray-200 overflow-hidden flex-shrink-0">
+                    {videoData.sceneImageUrl && (
                       <img
-                        src={videoData.avatarUrl || ""}
-                        alt="Avatar"
+                        src={videoData.sceneImageUrl}
+                        alt="Scene"
                         className="h-full w-full object-cover"
                       />
                     )}
                   </div>
+                  <div>
+                    <span className="text-sm text-gray-500">Scene</span>
+                    <p className="font-medium text-gray-900">
+                      {getOccasionLabel()}
+                    </p>
+                  </div>
                 </div>
+
+                {/* Character preview */}
+                <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
+                  <div className="h-16 w-12 rounded-lg bg-gray-200 overflow-hidden flex-shrink-0">
+                    {videoData.avatarUrl && (
+                      <img
+                        src={videoData.avatarUrl}
+                        alt="Character"
+                        className="h-full w-full object-cover"
+                      />
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-sm text-gray-500">Character</span>
+                    <p className="font-medium text-gray-900">
+                      {getCharacterLabel()}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Message */}
                 <div className="p-4 bg-gray-50 rounded-lg">
-                  <span className="text-gray-600 block mb-2">Message</span>
-                  <p className="text-gray-900">{videoData.message}</p>
+                  <span className="text-sm text-gray-500 block mb-2">
+                    Message
+                  </span>
+                  <p className="text-gray-900">
+                    &quot;{videoData.message}&quot;
+                  </p>
                 </div>
+
+                {/* Cost */}
                 {userCredits > 0 ? (
                   <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
                     <span className="text-green-700 font-medium">Cost</span>
                     <span className="text-lg font-bold text-green-700">
-                      1 Credit <span className="text-sm font-normal text-green-600">({userCredits} available)</span>
+                      1 Credit{" "}
+                      <span className="text-sm font-normal text-green-600">
+                        ({userCredits} available)
+                      </span>
                     </span>
                   </div>
                 ) : (
                   <div className="flex items-center justify-between p-4 bg-gray-100 rounded-lg">
                     <span className="text-gray-900 font-medium">Total</span>
-                    <span className="text-2xl font-bold text-gray-900">$5.00</span>
+                    <span className="text-2xl font-bold text-gray-900">
+                      $5.00
+                    </span>
                   </div>
                 )}
               </div>
 
-              <PaymentButton videoId={videoId || undefined} credits={userCredits} />
+              <PaymentButton
+                videoId={videoId || undefined}
+                credits={userCredits}
+              />
             </div>
           )}
 
           {/* Navigation Buttons */}
-          {step < 5 && (
+          {step < 4 && (
             <div className="flex justify-between mt-8 pt-6 border-t border-gray-100">
               <Button
                 variant="ghost"
@@ -316,13 +339,13 @@ export default function CreatePage() {
                 disabled={!canProceed()}
                 loading={isCreating}
               >
-                {step === 4 ? "Review" : "Next"}
+                {step === 3 ? "Review" : "Next"}
                 <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
             </div>
           )}
 
-          {step === 5 && (
+          {step === 4 && (
             <div className="mt-4 pt-4 border-t border-gray-100">
               <Button
                 variant="ghost"
@@ -339,7 +362,8 @@ export default function CreatePage() {
         {/* Credits info */}
         {session?.user && (
           <p className="text-center text-gray-500 mt-4">
-            You have {session.user.credits} credit{session.user.credits !== 1 ? "s" : ""} available
+            You have {session.user.credits} credit
+            {session.user.credits !== 1 ? "s" : ""} available
           </p>
         )}
       </div>

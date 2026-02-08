@@ -66,6 +66,9 @@ export function getVideoModel(modelId: string): VideoModel | undefined {
   return VIDEO_MODELS.find((m) => m.id === modelId);
 }
 
+/** Default model for new videos – VEO 3.1 Reference-to-Video */
+export const DEFAULT_VIDEO_MODEL_ID = "fal-ai/veo3.1/reference-to-video";
+
 /**
  * Backwards-compatible helper – returns a model ID based on whether an image
  * URL is present. Used by legacy code paths that don't have a stored modelId.
@@ -90,12 +93,12 @@ export interface VideoGenerationResult {
 
 export async function generateVideo(
   prompt: string,
-  imageUrl?: string,
+  imageUrls: string[] = [],
   modelId?: string,
 ): Promise<{ requestId: string; modelId: string }> {
   // Resolve which model to use
   const resolvedModelId =
-    modelId || getFalVideoModelId(imageUrl);
+    modelId || (imageUrls.length > 0 ? DEFAULT_VIDEO_MODEL_ID : "fal-ai/veo2");
   const model = getVideoModel(resolvedModelId);
 
   if (!model) {
@@ -119,7 +122,7 @@ export async function generateVideo(
     const result = await fal.queue.submit(resolvedModelId, {
       input: {
         prompt,
-        image_url: imageUrl!,
+        image_url: imageUrls[0],
         aspect_ratio: model.defaultAspect as "16:9",
         duration: model.defaultDuration as "8s",
       },
@@ -129,9 +132,6 @@ export async function generateVideo(
 
   // Multi-image reference-to-video (veo3.1/reference-to-video)
   if (model.imageMode === "multi") {
-    // Accept single image URL and wrap in array, or pass array directly
-    const imageUrls = imageUrl ? [imageUrl] : [];
-
     const input: Record<string, unknown> = {
       prompt,
       aspect_ratio: model.defaultAspect,
