@@ -95,6 +95,9 @@ export async function generateVideo(
   prompt: string,
   imageUrls: string[] = [],
   modelId?: string,
+  options: {
+    resolution?: string;
+  } = {},
 ): Promise<{ requestId: string; modelId: string }> {
   // Resolve which model to use
   const resolvedModelId =
@@ -139,7 +142,9 @@ export async function generateVideo(
       image_urls: imageUrls,
     };
 
-    if (model.defaultResolution) {
+    if (options.resolution) {
+      input.resolution = options.resolution;
+    } else if (model.defaultResolution) {
       input.resolution = model.defaultResolution;
     }
     if (model.supportsAudio) {

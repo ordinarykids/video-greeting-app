@@ -4,7 +4,9 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { generateVideo } from "@/lib/fal";
 import { uploadImageFromUrl } from "@/lib/blob";
-import { getScenePreset, getCharacterPreset } from "@/lib/presets";
+import { getScenePreset } from "@/lib/presets";
+import { buildShotPrompt, type Shot } from "@/lib/shots";
+import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 const generateSchema = z.object({
@@ -45,7 +47,8 @@ export async function POST(req: NextRequest) {
         avatarUrl: true,
         sceneTag: true,
         sceneImageUrl: true,
-        characterTag: true,
+        modelChoice: true,
+        shots: true,
         falJobId: true,
         falModelId: true,
       },
@@ -55,7 +58,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Video not found" }, { status: 404 });
     }
 
-    // Idempotency: if a job is already running / finished, don't start a new one.
+    // Idempotency: if already running / finished, don't start new jobs
     if (video.status === "PROCESSING" && video.falJobId) {
       return NextResponse.json({
         jobId: video.falJobId,
@@ -92,23 +95,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Build the prompt using scene + character + message
-    const prompt = buildVideoPrompt(
-      video.sceneTag,
-      video.characterTag,
-      video.occasion,
-      message,
-    );
-
-    // Collect reference image URLs
-    const imageUrls: string[] = [];
-
-    // Add scene image if available
-    if (video.sceneImageUrl && video.sceneImageUrl.startsWith("http")) {
-      imageUrls.push(video.sceneImageUrl);
-    }
-
-    // Add character/avatar image if available
+    // Ensure avatar URL is absolute / publicly accessible
     let avatarUrl = (video.avatarUrl || "").toString();
     if (avatarUrl.startsWith("/")) {
       const baseUrl = process.env.NEXTAUTH_URL;
@@ -130,42 +117,99 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (avatarUrl.startsWith("http")) {
-      imageUrls.push(avatarUrl);
-    }
-
-    if (imageUrls.length === 0) {
+    if (!avatarUrl.startsWith("http")) {
       return NextResponse.json(
-        { error: "At least one reference image is required" },
+        { error: "A valid avatar image is required" },
         { status: 400 },
       );
     }
 
-    // Call Fal.ai to generate video
-    const chosenModel = video.falModelId || undefined;
-    const { requestId, modelId } = await generateVideo(prompt, imageUrls, chosenModel);
+    // -----------------------------------------------------------------------
+    // Multi-shot parallel generation (both modes)
+    // -----------------------------------------------------------------------
+    const savedShots = (video.shots as Shot[] | null) || [];
+    if (savedShots.length === 0) {
+      return NextResponse.json(
+        { error: "No shots defined for this video" },
+        { status: 400 },
+      );
+    }
 
-    // Update video record with job ID and resolved model
+    // Resolve Fal model based on mode
+    const isQuick = video.modelChoice === "quick";
+    const falModel = isQuick
+      ? "fal-ai/veo3.1/fast/image-to-video"
+      : "fal-ai/veo3.1/reference-to-video";
+
+    // Build reference image array
+    // Quick: avatar only (single-image model)
+    // Cinematic: avatar + scene image (multi-image model)
+    const imageUrls: string[] = [avatarUrl];
+    if (
+      !isQuick &&
+      video.sceneImageUrl &&
+      video.sceneImageUrl.startsWith("http")
+    ) {
+      imageUrls.push(video.sceneImageUrl);
+    }
+
+    // Look up scene description for prompt
+    const scenePreset = video.sceneTag ? getScenePreset(video.sceneTag) : null;
+    const sceneDesc = scenePreset
+      ? scenePreset.label.toLowerCase()
+      : "a clean, well-lit setting";
+
+    // Occasion-specific tone
+    const toneMap: Record<string, string> = {
+      birthday: "warm, celebratory, and joyful",
+      congratulations: "enthusiastic and proud",
+      thankyou: "heartfelt and sincere",
+      custom: "friendly and genuine",
+    };
+    const tone = toneMap[video.occasion] || toneMap.custom;
+
+    // Submit all shots in parallel
+    const shotResults = await Promise.all(
+      savedShots.map(async (shot) => {
+        const prompt = buildShotPrompt(shot, sceneDesc, "the person", tone);
+        const { requestId, modelId } = await generateVideo(
+          prompt,
+          imageUrls,
+          falModel,
+          { resolution: "1080p" },
+        );
+        return {
+          ...shot,
+          falJobId: requestId,
+          falModelId: modelId,
+          status: "PROCESSING" as const,
+          videoUrl: null as string | null,
+        };
+      }),
+    );
+
+    // Use the first shot's job ID as the primary falJobId for backwards compat
+    const primaryJobId = shotResults[0].falJobId;
+
     await prisma.video.update({
       where: { id: videoId },
       data: {
         status: "PROCESSING",
-        falJobId: requestId,
-        falModelId: modelId,
+        falJobId: primaryJobId,
+        falModelId: falModel,
+        shots: shotResults as unknown as Prisma.InputJsonValue,
       },
     });
 
-    // Deduct credit from user
     await prisma.user.update({
       where: { id: session.user.id },
-      data: {
-        credits: { decrement: 1 },
-      },
+      data: { credits: { decrement: 1 } },
     });
 
     return NextResponse.json({
-      jobId: requestId,
+      jobId: primaryJobId,
       status: "PROCESSING",
+      shotCount: shotResults.length,
     });
   } catch (error) {
     console.error("Error generating video:", error);
@@ -174,34 +218,4 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     );
   }
-}
-
-function buildVideoPrompt(
-  sceneTag: string | null,
-  characterTag: string | null,
-  occasion: string,
-  message: string,
-): string {
-  // Look up scene description from preset
-  const scenePreset = sceneTag ? getScenePreset(sceneTag) : null;
-  const sceneDesc = scenePreset
-    ? scenePreset.label.toLowerCase()
-    : "a clean, well-lit setting";
-
-  // Look up character description from preset
-  const characterPreset = characterTag ? getCharacterPreset(characterTag) : null;
-  const characterDesc = characterPreset
-    ? characterPreset.label.toLowerCase()
-    : "the person";
-
-  // Occasion-specific tone
-  const toneMap: Record<string, string> = {
-    birthday: "warm, celebratory, and joyful",
-    congratulations: "enthusiastic and proud",
-    thankyou: "heartfelt and sincere",
-    custom: "friendly and genuine",
-  };
-  const tone = toneMap[occasion] || toneMap.custom;
-
-  return `A ${characterDesc} in ${sceneDesc}, looking directly at the camera with a ${tone} expression, speaking the following message: "${message}". The person should appear natural and expressive. High quality, cinematic lighting, professional-looking video.`;
 }

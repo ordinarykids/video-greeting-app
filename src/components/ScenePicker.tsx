@@ -90,13 +90,20 @@ export default function ScenePicker({
                   className="w-full h-full object-cover"
                 />
                 {/* Regenerate button */}
-                <button
-                  type="button"
+                <div
+                  role="button"
+                  tabIndex={0}
                   onClick={(e) => handleRegenerate(e, scene.tag, scene.prompt)}
-                  className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full hover:bg-white transition-colors"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      handleRegenerate(e as unknown as React.MouseEvent, scene.tag, scene.prompt);
+                    }
+                  }}
+                  className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full hover:bg-white transition-colors cursor-pointer"
                 >
                   <RefreshCw className="h-3.5 w-3.5 text-gray-700" />
-                </button>
+                </div>
               </>
             ) : isLoading ? (
               <div className="w-full h-full bg-gray-100 flex flex-col items-center justify-center gap-2">

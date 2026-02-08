@@ -16,8 +16,10 @@ function SuccessContent() {
     "loading" | "processing" | "completed" | "failed"
   >("loading");
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [shotVideoUrls, setShotVideoUrls] = useState<string[]>([]);
   const [videoId, setVideoId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [progressText, setProgressText] = useState<string | null>(null);
   const generationStartedRef = useRef(false);
 
   const sessionId = searchParams.get("session_id");
@@ -42,6 +44,9 @@ function SuccessContent() {
       if (videoData.status === "COMPLETED" && videoData.videoUrl) {
         setStatus("completed");
         setVideoUrl(videoData.videoUrl);
+        if (videoData.shotVideoUrls && videoData.shotVideoUrls.length > 0) {
+          setShotVideoUrls(videoData.shotVideoUrls);
+        }
         return true; // Stop polling
       } else if (videoData.status === "FAILED") {
         setStatus("failed");
@@ -49,6 +54,9 @@ function SuccessContent() {
         return true; // Stop polling
       } else {
         setStatus("processing");
+        if (videoData.progress) {
+          setProgressText(videoData.progress);
+        }
         return false; // Continue polling
       }
     };
@@ -89,6 +97,9 @@ function SuccessContent() {
           if (videoData.status === "COMPLETED" && videoData.videoUrl) {
             setStatus("completed");
             setVideoUrl(videoData.videoUrl);
+            if (videoData.shotVideoUrls && videoData.shotVideoUrls.length > 0) {
+              setShotVideoUrls(videoData.shotVideoUrls);
+            }
             return true;
           } else if (videoData.status === "FAILED") {
             setStatus("failed");
@@ -108,6 +119,9 @@ function SuccessContent() {
               }).catch(() => null);
             }
             setStatus("processing");
+            if (videoData.progress) {
+              setProgressText(videoData.progress);
+            }
             return false;
           }
         } else {
@@ -192,7 +206,7 @@ function SuccessContent() {
               <div className="rounded-lg bg-gray-100 p-4">
                 <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Processing...
+                  {progressText || "Processing..."}
                 </div>
               </div>
               {!!videoId && (
@@ -219,7 +233,12 @@ function SuccessContent() {
               </p>
 
               <div className="mb-6">
-                <VideoPlayer videoUrl={videoUrl} />
+                <VideoPlayer
+                  videoUrl={videoUrl}
+                  shotVideoUrls={
+                    shotVideoUrls.length > 0 ? shotVideoUrls : undefined
+                  }
+                />
               </div>
 
               <div className="space-y-3">

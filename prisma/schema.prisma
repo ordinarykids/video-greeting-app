@@ -70,6 +70,8 @@ model Video {
   sceneTag      String?
   sceneImageUrl String?
   characterTag  String?
+  modelChoice   String?     // "quick" or "cinematic"
+  shots         Json?       // Array of shot objects with falJobIds for multi-shot
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 }
