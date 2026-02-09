@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, ImageIcon, RefreshCw } from "lucide-react";
+import { Loader2, ImageIcon, RefreshCw, AlertCircle } from "lucide-react";
 import { SCENE_PRESETS } from "@/lib/presets";
 
 interface ScenePickerProps {
@@ -19,30 +19,54 @@ export default function ScenePicker({
     Record<string, string>
   >({});
   const [loadingTags, setLoadingTags] = useState<Set<string>>(new Set());
+  const [errorTags, setErrorTags] = useState<Set<string>>(new Set());
 
-  const generateImage = async (tag: string, prompt: string) => {
+  const generateImage = async (tag: string, prompt: string, retries = 2) => {
     setLoadingTags((prev) => new Set(prev).add(tag));
-    try {
-      const res = await fetch("/api/images", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, aspect: "landscape_4_3" }),
-      });
+    setErrorTags((prev) => {
+      const next = new Set(prev);
+      next.delete(tag);
+      return next;
+    });
 
-      if (!res.ok) throw new Error("Failed to generate");
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const res = await fetch("/api/images", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt, aspect: "landscape_4_3" }),
+        });
 
-      const { url } = await res.json();
-      setGeneratedImages((prev) => ({ ...prev, [tag]: url }));
-      onSelect(tag, url);
-    } catch (error) {
-      console.error("Error generating scene image:", error);
-    } finally {
-      setLoadingTags((prev) => {
-        const next = new Set(prev);
-        next.delete(tag);
-        return next;
-      });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error || `HTTP ${res.status}`);
+        }
+
+        const { url } = await res.json();
+        setGeneratedImages((prev) => ({ ...prev, [tag]: url }));
+        setLoadingTags((prev) => {
+          const next = new Set(prev);
+          next.delete(tag);
+          return next;
+        });
+        onSelect(tag, url);
+        return; // success
+      } catch (error) {
+        console.error(`Scene image attempt ${attempt + 1} failed:`, error);
+        if (attempt < retries) {
+          // Wait before retrying (1s, then 2s)
+          await new Promise((r) => setTimeout(r, (attempt + 1) * 1000));
+        }
+      }
     }
+
+    // All retries exhausted
+    setErrorTags((prev) => new Set(prev).add(tag));
+    setLoadingTags((prev) => {
+      const next = new Set(prev);
+      next.delete(tag);
+      return next;
+    });
   };
 
   const handleClick = (tag: string, prompt: string) => {
@@ -68,6 +92,7 @@ export default function ScenePicker({
       {SCENE_PRESETS.map((scene) => {
         const imageUrl = generatedImages[scene.tag];
         const isLoading = loadingTags.has(scene.tag);
+        const isError = errorTags.has(scene.tag);
         const isSelected = selectedTag === scene.tag;
 
         return (
@@ -79,7 +104,9 @@ export default function ScenePicker({
             className={`relative aspect-[4/3] rounded-xl overflow-hidden border-2 transition-all ${
               isSelected
                 ? "border-gray-900 ring-2 ring-gray-900 ring-offset-2"
-                : "border-gray-200 hover:border-gray-400"
+                : isError
+                  ? "border-red-300 hover:border-red-400"
+                  : "border-gray-200 hover:border-gray-400"
             }`}
           >
             {imageUrl ? (
@@ -109,6 +136,11 @@ export default function ScenePicker({
               <div className="w-full h-full bg-gray-100 flex flex-col items-center justify-center gap-2">
                 <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
                 <span className="text-xs text-gray-400">Generating...</span>
+              </div>
+            ) : isError ? (
+              <div className="w-full h-full bg-red-50 flex flex-col items-center justify-center gap-2 hover:bg-red-100 transition-colors">
+                <AlertCircle className="h-6 w-6 text-red-400" />
+                <span className="text-xs text-red-500">Failed - tap to retry</span>
               </div>
             ) : (
               <div className="w-full h-full bg-gray-50 flex flex-col items-center justify-center gap-2 hover:bg-gray-100 transition-colors">
