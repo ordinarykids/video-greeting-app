@@ -1,9 +1,16 @@
-import { FFmpeg } from "@ffmpeg/ffmpeg";
-import { fetchFile, toBlobURL } from "@ffmpeg/util";
+import { execFile } from "child_process";
+import { promisify } from "util";
+import { writeFile, mkdir, readFile, unlink, rmdir, chmod } from "fs/promises";
+import { join } from "path";
+import { tmpdir } from "os";
+import { randomUUID } from "crypto";
+
+const execFileAsync = promisify(execFile);
 
 /**
  * Concatenate multiple MP4 video URLs into a single MP4.
- * Uses ffmpeg.wasm with the concat demuxer (stream copy, no re-encoding).
+ * Uses a real ffmpeg binary (ffmpeg-static) with the concat demuxer
+ * (stream copy, no re-encoding). Works in Node.js serverless environments.
  * Returns the concatenated video as a Uint8Array.
  */
 export async function concatenateVideos(
@@ -13,64 +20,76 @@ export async function concatenateVideos(
     throw new Error("No video URLs provided");
   }
   if (videoUrls.length === 1) {
-    // Single video — just fetch and return as-is
-    const data = await fetchFile(videoUrls[0]);
-    return data;
+    const response = await fetch(videoUrls[0]);
+    const arrayBuffer = await response.arrayBuffer();
+    return new Uint8Array(arrayBuffer);
   }
 
-  const ffmpeg = new FFmpeg();
+  // Resolve the ffmpeg binary path
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const ffmpegPath: string = require("ffmpeg-static");
+
+  // Ensure the binary is executable (needed in some serverless environments)
+  try {
+    await chmod(ffmpegPath, 0o755);
+  } catch {
+    // May fail on read-only filesystems — binary is usually already executable
+  }
+
+  // Create a temp directory for our work
+  const workDir = join(tmpdir(), `concat-${randomUUID()}`);
+  await mkdir(workDir, { recursive: true });
 
   try {
-    // Load the ffmpeg.wasm core with toBlobURL for cross-origin support
-    const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.9/dist/esm";
-    await ffmpeg.load({
-      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-      wasmURL: await toBlobURL(
-        `${baseURL}/ffmpeg-core.wasm`,
-        "application/wasm",
-      ),
+    // Download all shot videos in parallel
+    const downloadPromises = videoUrls.map(async (url, i) => {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to download shot ${i}: ${response.status}`);
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      const filePath = join(workDir, `shot${i}.mp4`);
+      await writeFile(filePath, Buffer.from(arrayBuffer));
+      return filePath;
     });
 
-    // Download each video and write to the virtual filesystem
-    for (let i = 0; i < videoUrls.length; i++) {
-      const data = await fetchFile(videoUrls[i]);
-      await ffmpeg.writeFile(`shot${i}.mp4`, data);
-    }
+    const filePaths = await Promise.all(downloadPromises);
 
     // Create concat list file
-    const concatList = videoUrls
-      .map((_, i) => `file 'shot${i}.mp4'`)
+    const concatList = filePaths
+      .map((fp) => `file '${fp}'`)
       .join("\n");
-    await ffmpeg.writeFile(
-      "list.txt",
-      new TextEncoder().encode(concatList),
-    );
+    const listPath = join(workDir, "list.txt");
+    await writeFile(listPath, concatList, "utf-8");
 
-    // Run concat with stream copy (no re-encoding) — fast remux only
-    await ffmpeg.exec([
-      "-f",
-      "concat",
-      "-safe",
-      "0",
-      "-i",
-      "list.txt",
-      "-c",
-      "copy",
-      "-movflags",
-      "+faststart",
-      "output.mp4",
-    ]);
+    // Output path
+    const outputPath = join(workDir, "output.mp4");
 
-    // Read the output
-    const output = await ffmpeg.readFile("output.mp4");
+    // Run ffmpeg concat with stream copy (no re-encoding) — fast remux only
+    await execFileAsync(ffmpegPath, [
+      "-f", "concat",
+      "-safe", "0",
+      "-i", listPath,
+      "-c", "copy",
+      "-movflags", "+faststart",
+      "-y",
+      outputPath,
+    ], {
+      timeout: 30000, // 30 second timeout
+    });
 
-    if (output instanceof Uint8Array) {
-      return output;
-    }
-
-    // readFile can return string for text files; convert just in case
-    return new TextEncoder().encode(output as string);
+    // Read the output file
+    const outputBuffer = await readFile(outputPath);
+    return new Uint8Array(outputBuffer);
   } finally {
-    ffmpeg.terminate();
+    // Clean up temp files
+    try {
+      const files = videoUrls.map((_, i) => join(workDir, `shot${i}.mp4`));
+      files.push(join(workDir, "list.txt"), join(workDir, "output.mp4"));
+      await Promise.allSettled(files.map((f) => unlink(f)));
+      await rmdir(workDir);
+    } catch {
+      // Ignore cleanup errors
+    }
   }
 }

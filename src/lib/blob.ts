@@ -7,6 +7,7 @@ export async function uploadToBlob(
 ): Promise<string> {
   const blob = await put(`${folder}/${filename}`, file, {
     access: "public",
+    addRandomSuffix: true,
   });
 
   return blob.url;

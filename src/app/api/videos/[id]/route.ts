@@ -40,6 +40,7 @@ export async function GET(
         modelChoice: true,
         shots: true,
         createdAt: true,
+        updatedAt: true,
         userId: true,
       },
     });
@@ -48,8 +49,37 @@ export async function GET(
       return NextResponse.json({ error: "Video not found" }, { status: 404 });
     }
 
-    // If video is currently being merged, tell the client to keep polling
+    // If video is currently being merged, check if it's stuck
     if (video.status === "MERGING") {
+      const mergeAge = Date.now() - new Date(video.updatedAt).getTime();
+      const MERGE_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
+
+      if (mergeAge > MERGE_TIMEOUT_MS) {
+        // Merge is stuck — fall back to first shot URL
+        const shotRecords = (video.shots as ShotRecord[] | null) || [];
+        const shotVideoUrls = shotRecords
+          .sort((a, b) => a.index - b.index)
+          .map((s) => s.videoUrl)
+          .filter(Boolean) as string[];
+        const primaryUrl = shotVideoUrls[0] || null;
+
+        await prisma.video.update({
+          where: { id },
+          data: {
+            status: "COMPLETED",
+            videoUrl: primaryUrl,
+          },
+        });
+
+        return NextResponse.json({
+          id: video.id,
+          status: "COMPLETED",
+          videoUrl: primaryUrl,
+          shotVideoUrls,
+          shareUrl: `${process.env.NEXTAUTH_URL}/video/${video.id}`,
+        });
+      }
+
       return NextResponse.json({
         id: video.id,
         status: "MERGING",

@@ -11,16 +11,18 @@ import {
   Camera,
   Zap,
   Film,
+  Clapperboard,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import ScenePicker from "@/components/ScenePicker";
 import MessageEditor from "@/components/MessageEditor";
 import PaymentButton from "@/components/PaymentButton";
+import ShotEditor from "@/components/ShotEditor";
 import { getScenePreset } from "@/lib/presets";
 import { splitIntoShots, type Shot } from "@/lib/shots";
 
-type Step = 1 | 2 | 3 | 4 | 5;
+type Step = 1 | 2 | 3 | 4 | 5 | 6;
 type ModelChoice = "quick" | "cinematic";
 
 interface VideoData {
@@ -54,7 +56,7 @@ export default function CreatePage() {
     }
   }, [status, router]);
 
-  // Recompute shots when message changes — both modes use multi-shot
+  // Recompute shots when message changes
   useEffect(() => {
     if (videoData.message) {
       setShots(splitIntoShots(videoData.message));
@@ -74,6 +76,8 @@ export default function CreatePage() {
         return videoData.sceneTag !== null && videoData.sceneImageUrl !== null;
       case 4:
         return videoData.message.length > 0 && videoData.message.length <= 500;
+      case 5:
+        return shots.length > 0 && shots.every((s) => s.text.trim().length > 0);
       default:
         return true;
     }
@@ -86,7 +90,8 @@ export default function CreatePage() {
       return;
     }
 
-    if (step === 4 && !videoId) {
+    // After shots review (step 5), create the video record before going to pay
+    if (step === 5 && !videoId) {
       setIsCreating(true);
       try {
         const occasion = videoData.sceneTag
@@ -103,7 +108,7 @@ export default function CreatePage() {
             sceneImageUrl: videoData.sceneImageUrl,
             message: videoData.message,
             occasion,
-            shots: splitIntoShots(videoData.message),
+            shots: shots,
           }),
         });
 
@@ -114,7 +119,7 @@ export default function CreatePage() {
         }
 
         setVideoId(data.videoId);
-        setStep(5);
+        setStep(6);
       } catch (error) {
         console.error("Error creating video:", error);
         const msg =
@@ -123,14 +128,25 @@ export default function CreatePage() {
       } finally {
         setIsCreating(false);
       }
-    } else if (step < 5) {
+    } else if (step < 6) {
       setStep((step + 1) as Step);
     }
   };
 
   const handleBack = () => {
+    // From shots step, go back to message
+    if (step === 5) {
+      setStep(4);
+      return;
+    }
+    // From message step in quick mode, go back to mode
     if (step === 4 && videoData.modelChoice === "quick") {
       setStep(2);
+      return;
+    }
+    // From review step, go back to shots
+    if (step === 6) {
+      setStep(5);
       return;
     }
     if (step > 1) {
@@ -174,13 +190,17 @@ export default function CreatePage() {
 
   const userCredits = session?.user?.credits ?? 0;
 
+  // Total estimated video duration
+  const totalDuration = shots.reduce((sum, s) => sum + s.estimatedSeconds, 0);
+
   const stepLabels = (() => {
     if (videoData.modelChoice === "quick") {
       return [
         { number: 1, label: "Photo" },
         { number: 2, label: "Mode" },
         { number: 4, label: "Message" },
-        { number: 5, label: userCredits > 0 ? "Generate" : "Pay" },
+        { number: 5, label: "Shots" },
+        { number: 6, label: userCredits > 0 ? "Generate" : "Pay" },
       ];
     }
     return [
@@ -188,7 +208,8 @@ export default function CreatePage() {
       { number: 2, label: "Mode" },
       { number: 3, label: "Scene" },
       { number: 4, label: "Message" },
-      { number: 5, label: userCredits > 0 ? "Generate" : "Pay" },
+      { number: 5, label: "Shots" },
+      { number: 6, label: userCredits > 0 ? "Generate" : "Pay" },
     ];
   })();
 
@@ -438,12 +459,11 @@ export default function CreatePage() {
           {step === 4 && (
             <div>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                Write the Message
+                Write the Script
               </h2>
               <p className="text-gray-600 mb-6">
                 Write what you want to say in the video (max 500 characters).
-                Longer messages will be split into multiple shots with different
-                camera angles.
+                Your script will be broken into shots on the next step.
               </p>
               <MessageEditor
                 message={videoData.message}
@@ -458,38 +478,42 @@ export default function CreatePage() {
               />
 
               {shots.length > 0 && (
-                  <div className="mt-6 border-t border-gray-100 pt-4">
-                    <h3 className="text-sm font-medium text-gray-900 mb-3">
-                      Shot Breakdown ({shots.length} shot
-                      {shots.length !== 1 ? "s" : ""})
-                    </h3>
-                    <div className="space-y-2">
-                      {shots.map((shot, i) => (
-                        <div
-                          key={i}
-                          className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg"
-                        >
-                          <span className="flex-shrink-0 h-6 w-6 rounded-full bg-gray-900 text-white text-xs flex items-center justify-center font-medium">
-                            {i + 1}
-                          </span>
-                          <div className="min-w-0">
-                            <p className="text-sm text-gray-900">
-                              &quot;{shot.text}&quot;
-                            </p>
-                            <p className="text-xs text-gray-400 mt-1">
-                              {shot.camera.split(",")[0]}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+                  <Clapperboard className="h-4 w-4" />
+                  <span>
+                    Will produce {shots.length} shot{shots.length !== 1 ? "s" : ""}
+                    {" "}({totalDuration}s estimated)
+                  </span>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Step 5: Review & Pay / Generate */}
+          {/* Step 5: Shot Editor */}
           {step === 5 && (
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                Edit Shots
+              </h2>
+              <p className="text-gray-600 mb-6">
+                Your script has been split into {shots.length} shot{shots.length !== 1 ? "s" : ""}, each
+                targeting 6-8 seconds. Edit the text, change camera angles,
+                reorder, add, or remove shots.
+              </p>
+
+              <ShotEditor shots={shots} onChange={setShots} />
+
+              <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  All shots will be generated in parallel, then merged into a
+                  single video.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Step 6: Review & Pay / Generate */}
+          {step === 6 && (
             <div>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
                 {userCredits > 0 ? "Review & Generate" : "Review & Pay"}
@@ -555,27 +579,25 @@ export default function CreatePage() {
 
                 <div className="p-4 bg-gray-50 rounded-lg">
                   <span className="text-sm text-gray-500 block mb-2">
-                    Message
+                    Script
                   </span>
                   <p className="text-gray-900">
                     &quot;{videoData.message}&quot;
                   </p>
                 </div>
 
-                {shots.length > 1 && (
-                  <div className="p-4 bg-gray-50 rounded-lg">
-                    <span className="text-sm text-gray-500 block mb-2">
-                      {shots.length} shots will be generated in parallel
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <span className="text-sm text-gray-500">Shots</span>
+                  <div className="flex items-center gap-2">
+                    <Clapperboard className="h-4 w-4 text-gray-600" />
+                    <span className="font-medium text-gray-900">
+                      {shots.length} shot{shots.length !== 1 ? "s" : ""}
+                      <span className="font-normal text-gray-500 ml-1">
+                        (~{totalDuration}s)
+                      </span>
                     </span>
-                    <div className="space-y-1">
-                      {shots.map((shot, i) => (
-                        <p key={i} className="text-xs text-gray-600">
-                          Shot {i + 1}: {shot.camera.split(",")[0]}
-                        </p>
-                      ))}
-                    </div>
                   </div>
-                )}
+                </div>
 
                 {userCredits > 0 ? (
                   <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
@@ -605,7 +627,7 @@ export default function CreatePage() {
           )}
 
           {/* Navigation Buttons */}
-          {step < 5 && (
+          {step < 6 && (
             <div className="flex justify-between mt-8 pt-6 border-t border-gray-100">
               <Button
                 variant="ghost"
@@ -620,13 +642,13 @@ export default function CreatePage() {
                 disabled={!canProceed()}
                 loading={isCreating}
               >
-                {step === 4 ? "Review" : "Next"}
+                {step === 5 ? "Confirm & Continue" : step === 4 ? "Review Shots" : "Next"}
                 <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
             </div>
           )}
 
-          {step === 5 && (
+          {step === 6 && (
             <div className="mt-4 pt-4 border-t border-gray-100">
               <Button
                 variant="ghost"
@@ -634,7 +656,7 @@ export default function CreatePage() {
                 className="w-full"
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Edit
+                Back to Shots
               </Button>
             </div>
           )}
